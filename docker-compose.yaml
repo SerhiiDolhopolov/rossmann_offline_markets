@@ -1,0 +1,124 @@
+services:    
+  local_db_1:
+    container_name: offline_market_db_1
+    image: postgres:latest
+    restart: always
+    ports:
+      - 1111:5432
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+
+  local_db_2:
+    container_name: offline_market_db_2
+    image: postgres:latest
+    restart: always
+    ports:
+      - 2222:5432
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+
+  local_db_3:
+    container_name: offline_market_db_3
+    image: postgres:latest
+    restart: always
+    ports:
+      - 3333:5432
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+
+  adminer:
+    container_name: offline_market_adminer
+    image: adminer
+    restart: always
+    ports:
+      - 1000:8080
+
+  app_1:
+    container_name: offline_market_app_1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      local_db_1:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+      POSTGRES_PORT: $POSTGRES_PORT
+      POSTGRES_HOST: local_db_1
+      SHOP_ID: 1
+      ADMIN_EMAIL: 'stannis.baratheon@example.com'
+      COURIER_EMAIL: 'ramsay.bolton@example.com'
+      CASHIER_1_EMAIL: 'renly.baratheon@example.com'
+      CASHIER_2_EMAIL: 'davos.seaworth@example.com'
+      CASHIER_3_EMAIL: 'robert.baratheon@example.com'
+
+  app_2:
+    container_name: offline_market_app_2
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      local_db_2:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+      POSTGRES_PORT: $POSTGRES_PORT
+      POSTGRES_HOST: local_db_2
+      SHOP_ID: 2
+      ADMIN_EMAIL: 'eddard.stark@example.com'
+      COURIER_EMAIL: 'ramsay.bolton@example.com'
+      CASHIER_1_EMAIL: 'robb.stark@example.com'
+      CASHIER_2_EMAIL: 'jon.snow@example.com'
+      CASHIER_3_EMAIL: 'catelyn.stark@example.com'
+
+  app_3:
+    container_name: offline_market_app_3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      local_db_3:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+      POSTGRES_PORT: $POSTGRES_PORT
+      POSTGRES_HOST: local_db_3
+      SHOP_ID: 3
+      ADMIN_EMAIL: 'tywin.lannister@example.com'
+      COURIER_EMAIL: 'ramsay.bolton@example.com'
+      CASHIER_1_EMAIL: 'tyrion.lannister@example.com'
+      CASHIER_2_EMAIL: 'jaime.lannister@example.com'
+      CASHIER_3_EMAIL: 'cersei.lannister@example.com'
