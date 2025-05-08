@@ -1,7 +1,8 @@
 import os
 import asyncio
 from pathlib import Path
-from datetime import datetime, timezone
+import datetime
+from datetime import timezone
 
 from app.services.buy_service import pay_for_products
 from app.services.delivery_service import do_delivery
@@ -12,7 +13,8 @@ from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, ge
 from oltp_sync import sync_categories, sync_products
 from app import Shop, Employee
 
-working_time = 100
+time_step = 0.01
+minutes_step = 5
 shop: Shop = None
 admin: Employee = None
 courier: Employee = None
@@ -24,8 +26,32 @@ CASHIER_1_EMAIL = os.getenv('CASHIER_1_EMAIL')
 CASHIER_2_EMAIL = os.getenv('CASHIER_2_EMAIL')
 CASHIER_3_EMAIL = os.getenv('CASHIER_3_EMAIL')
 
-async def main():    
+_real_datetime = datetime.datetime
+
+class PatchedDateTime(datetime.datetime):
+    _fake_now = _real_datetime(2025, 6, 1, 8, 0)
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls._fake_now
+
+    @classmethod
+    def add_minutes(cls, minutes):
+        cls._fake_now += datetime.timedelta(minutes=minutes)
+        
+datetime.datetime = PatchedDateTime
+
+async def main():
+    asyncio.create_task(start_time())
+    # 90 days
+    for _ in range(1, 61):  
+        await start_work_shift()
+
+async def start_work_shift():    
     global shop, admin, courier, working_time
+    
+    while datetime.datetime.now().hour < 9:
+        await asyncio.sleep(time_step)
     
     init_db()
     shop = authorize_shop(SHOP_ID, 'password')
@@ -58,21 +84,28 @@ async def main():
             print(f"Terminal {terminal} is authorized.")
     
     sync()
-    print('Work is started')
-    working_task = asyncio.create_task(start_working())
+    print(f'Work is started {datetime.datetime.now()}')
+    
     task_delivery = asyncio.create_task(start_delivery_process())
     task1 = asyncio.create_task(start_cashier_working(terminals[0], CASHIER_1_EMAIL, 'password'))
     task2 = asyncio.create_task(start_cashier_working(terminals[1], CASHIER_2_EMAIL, 'password'))
     task3 = asyncio.create_task(start_cashier_working(terminals[2], CASHIER_3_EMAIL, 'password'))
     
-    await asyncio.gather(working_task, task_delivery, task1, task2, task3)
+    await asyncio.gather(task_delivery, task1, task2, task3)
+    print(f'Work is ended {datetime.datetime.now()}')
+    datetime.datetime.add_minutes(11 * 60 / minutes_step)
+    db = next(get_db())
+    try:
+        make_transactions_report(db, shop, admin)
+    finally:
+        db.close()
     
 def sync():
     path = Path(f"sync_time_{shop.shop_id}")
     if path.exists():
         sync_time = path.read_text()
     else:
-        sync_time = datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
+        sync_time = datetime.datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
         
     db = next(get_db())
     try:
@@ -81,32 +114,24 @@ def sync():
         print("Synchronized successfully.")
     finally:
         db.close()
-        path.write_text(datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
-        
-async def start_working():
-    global working_time
-    
-    while working_time:
-        working_time -= 1
-        await asyncio.sleep(1)
-    print('Work is finished')
-    db = next(get_db())
-    try:
-        make_transactions_report(db, shop, admin)
-    finally:
-        db.close()
+        path.write_text(datetime.datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
+           
+async def start_time():
+    while True:
+        await asyncio.sleep(time_step)
+        datetime.datetime.add_minutes(minutes_step)
         
 async def start_delivery_process():
-    counter = 0
-    while working_time:
-        counter += 1
-        print(f'Delivery process iteration: {counter}')
-        db = next(get_db())
-        try:
-            do_delivery(db, shop, admin, courier)
-        finally:
-            db.close()
-        await asyncio.sleep(40)
+    while 9 <= datetime.datetime.now().hour < 21:
+        now = datetime.datetime.now()
+        if now.hour == 10 or now.hour == 18:
+            db = next(get_db())
+            try:
+                do_delivery(db, shop, admin, courier)
+            finally:
+                db.close()
+            await asyncio.sleep(60 / minutes_step * time_step )
+        await asyncio.sleep(time_step)
     
 async def start_cashier_working(terminal_id, email: str, password: str):
     employee = authorize_employee(email, password)
@@ -116,16 +141,14 @@ async def start_cashier_working(terminal_id, email: str, password: str):
         print(f"Authorization {shop.shop_id} failed.")
         return
     
-    counter = 0
-    while working_time:
-        counter += 1
-        print(f'Cashier {employee.first_name} process iteration: {counter}')
+    while 9 <= datetime.datetime.now().hour < 21:
         db = next(get_db())
         try:
             pay_for_products(db, terminal_id, employee)
         finally:
             db.close()
-        await asyncio.sleep(1)
+        await asyncio.sleep(time_step)
+        
     
 if __name__ == "__main__":
     asyncio.run(main())

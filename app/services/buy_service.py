@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+import datetime
 
 from sqlalchemy.orm import Session
 
@@ -68,7 +68,7 @@ def pay_for_products(db: Session, terminal_id: int, cashier: Employee):
     transaсtion = Transaction(
             terminal_id=terminal_id,
             cashier_id=cashier.employee_id,
-            transaction_time=datetime.now().strftime(DATE_TIME_FORMAT),
+            transaction_time=datetime.datetime.now().strftime(DATE_TIME_FORMAT),
             amount = transaction_amount,
             loyalty_discount = loyalty_discount,
             total_amount = total_amount,
