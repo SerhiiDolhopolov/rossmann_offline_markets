@@ -5,7 +5,6 @@ import datetime
 
 from app.models import Transaction, TransactionItem, Product, Category
 from app import Shop, Employee
-from app.config import DATE_TIME_FORMAT
 
 
 
@@ -49,7 +48,7 @@ def make_transactions_report(db: Session, shop: Shop, admin: Employee):
         })
     report_data.sort(key=lambda x: (x['transaction_id'], x['product_id']))
     fieldnames = report_data[0].keys()
-    path = Path('transcactions')
+    path = Path('transactions')
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     date = datetime.datetime.now().date()

@@ -13,8 +13,13 @@ from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, ge
 from oltp_sync import sync_categories, sync_products
 from app import Shop, Employee
 
-time_step = 0.01
-minutes_step = 5
+
+START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
+TIME_STEP = 0.01
+MINUTES_STEP = 5
+current_day = 1
+product_price_factor = 1.0
+
 shop: Shop = None
 admin: Employee = None
 courier: Employee = None
@@ -26,10 +31,9 @@ CASHIER_1_EMAIL = os.getenv('CASHIER_1_EMAIL')
 CASHIER_2_EMAIL = os.getenv('CASHIER_2_EMAIL')
 CASHIER_3_EMAIL = os.getenv('CASHIER_3_EMAIL')
 
-_real_datetime = datetime.datetime
 
 class PatchedDateTime(datetime.datetime):
-    _fake_now = _real_datetime(2025, 6, 1, 8, 0)
+    _fake_now = START_DATE_TIME
 
     @classmethod
     def now(cls, tz=None):
@@ -42,16 +46,21 @@ class PatchedDateTime(datetime.datetime):
 datetime.datetime = PatchedDateTime
 
 async def main():
+    global current_day, product_price_factor
+    
     asyncio.create_task(start_time())
-    # 90 days
-    for _ in range(1, 61):  
+    # 60 days
+    for current_day in range(current_day, 61):  
+        print(datetime.datetime.now())
+        if current_day % 20 == 0:
+            product_price_factor += 0.05
         await start_work_shift()
 
 async def start_work_shift():    
     global shop, admin, courier, working_time
     
     while datetime.datetime.now().hour < 9:
-        await asyncio.sleep(time_step)
+        await asyncio.sleep(TIME_STEP)
     
     init_db()
     shop = authorize_shop(SHOP_ID, 'password')
@@ -93,7 +102,7 @@ async def start_work_shift():
     
     await asyncio.gather(task_delivery, task1, task2, task3)
     print(f'Work is ended {datetime.datetime.now()}')
-    datetime.datetime.add_minutes(11 * 60 / minutes_step)
+    datetime.datetime.add_minutes(11 * 60)
     db = next(get_db())
     try:
         make_transactions_report(db, shop, admin)
@@ -118,20 +127,19 @@ def sync():
            
 async def start_time():
     while True:
-        await asyncio.sleep(time_step)
-        datetime.datetime.add_minutes(minutes_step)
+        await asyncio.sleep(TIME_STEP)
+        datetime.datetime.add_minutes(MINUTES_STEP)
         
 async def start_delivery_process():
     while 9 <= datetime.datetime.now().hour < 21:
         now = datetime.datetime.now()
-        if now.hour == 10 or now.hour == 18:
+        if (now.hour, now.minute) in [(10, 0), (18, 0)]:
             db = next(get_db())
             try:
                 do_delivery(db, shop, admin, courier)
             finally:
                 db.close()
-            await asyncio.sleep(60 / minutes_step * time_step )
-        await asyncio.sleep(time_step)
+        await asyncio.sleep(TIME_STEP)
     
 async def start_cashier_working(terminal_id, email: str, password: str):
     employee = authorize_employee(email, password)
@@ -144,10 +152,10 @@ async def start_cashier_working(terminal_id, email: str, password: str):
     while 9 <= datetime.datetime.now().hour < 21:
         db = next(get_db())
         try:
-            pay_for_products(db, terminal_id, employee)
+            pay_for_products(db, terminal_id, employee, factor=product_price_factor)
         finally:
             db.close()
-        await asyncio.sleep(time_step)
+        await asyncio.sleep(TIME_STEP)
         
     
 if __name__ == "__main__":

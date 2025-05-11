@@ -2,3 +2,6 @@ __pycache__/
 */__pycache__/
 *.py[cod]
 .venv
+orders/
+transactions/
+sync_time*

@@ -33,7 +33,7 @@ def select_products(db: Session):
     return selected_products
         
         
-def pay_for_products(db: Session, terminal_id: int, cashier: Employee):
+def pay_for_products(db: Session, terminal_id: int, cashier: Employee, factor: float = 1.0):
     products = select_products(db)
     if not products:
         print("No products selected.")
@@ -43,7 +43,8 @@ def pay_for_products(db: Session, terminal_id: int, cashier: Employee):
     transaction_amount = 0
     
     for product, quantity in products.items():
-        unit_price = product.price * (1 - product.discount)
+        product_price = product.price * factor
+        unit_price = product_price * (1 - product.discount)
         unit_price = round(unit_price, 2)
         transaction_item = TransactionItem(
             product=product,
