@@ -9,7 +9,7 @@ class Product(Base):
 
     product_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(255))
-    description: Mapped[str] = mapped_column(String(2048), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     barcode: Mapped[str] = mapped_column(String(12), unique=True)
     category_id: Mapped[int] = mapped_column(Integer, ForeignKey("categories.category_id"))
     price: Mapped[float]

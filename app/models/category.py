@@ -9,7 +9,7 @@ class Category(Base):
 
     category_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(255))
-    description: Mapped[str] = mapped_column(String(2048), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_deleted: Mapped[bool] 
     
     products = relationship("Product", back_populates="category")
