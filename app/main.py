@@ -1,5 +1,4 @@
 import asyncio
-import json
 from pathlib import Path
 import datetime
 from datetime import timezone
@@ -7,7 +6,7 @@ from datetime import timezone
 from db import init_db, get_db
 from app import Shop, Employee
 from app.config import SHOP_ID, ADMIN_EMAIL, COURIER_EMAIL, CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
-from app.config import KAFKA_TOPIC_LOCAL_DB_UPDATE_CATEGORY
+from app.config import KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY
 from app.services.products_service import pay_for_products, do_delivery, get_quantity_of_updated_products
 from app.services.transactions_service import make_transactions_report
 from app.services.sync_service import sync_category
@@ -15,6 +14,7 @@ from kafka.producer import init_producer, close_producer, update_products_quanti
 from kafka.consumer import consume_messages
 from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, get_id_available_terminals
 from oltp_sync import sync_categories, sync_products
+from rossmann_sync_schemas import CategorySchema
 
 
 START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
@@ -110,7 +110,7 @@ async def start_work_shift():
     sync()
     print(f'Work is started {datetime.datetime.now()}')
     asyncio.create_task(start_kafka_producer())
-    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPDATE_CATEGORY: sync_category_by_kafka}))
+    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
     
     
     task_delivery = asyncio.create_task(start_delivery_process())
@@ -161,20 +161,25 @@ async def start_cashier_working(terminal_id, email: str, password: str):
         
 
     
-async def sync_category_by_kafka(value: str):
-    data = json.loads(value)
-    sync_time = get_sync_time()
-    if data['last_updated_utc'] <= sync_time:
+async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
+    try:
+        category = CategorySchema.model_validate_json(value)  
+    except Exception as e:
+        print(f"Error parsing category data: {e}")
         return
-        
+    sync_time = get_sync_time()
+    
+    if updated_at_utc <= sync_time:
+        return
+    
     db = next(get_db())
     try:
         sync_category(
             db,
-            is_deleted=data['is_deleted'],
-            category_id=int(data['category_id']),
-            name=data['name'],
-            description=data['description']
+            is_deleted=category.is_deleted,
+            category_id=category.category_id,
+            name=category.name,
+            description=category.description,
         )
     finally:
         db.close()        
@@ -184,19 +189,22 @@ def sync():
         
     db = next(get_db())
     try:
+        sync_time = sync_time.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
         sync_categories(db, sync_time)
         sync_products(db, shop.shop_id, sync_time)
         print("Synchronized successfully.")
     finally:
         db.close()
         
-def get_sync_time():
+def get_sync_time() -> datetime:
     path = Path(f"sync_time_{shop.shop_id}")
     if path.exists():
         sync_time = path.read_text()
+        sync_time = datetime.datetime.fromisoformat(sync_time.replace('Z', '+00:00'))
     else:
-        sync_time = datetime.datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
-    path.write_text(datetime.datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
+        sync_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+            
+    path.write_text(datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'))
     return sync_time
         
     

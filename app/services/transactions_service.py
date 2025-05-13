@@ -7,7 +7,6 @@ from app.models import Transaction, TransactionItem, Product, Category
 from app import Shop, Employee
 
 
-
 def make_transactions_report(db: Session, shop: Shop, admin: Employee):
     report_data = []
     transactions_info = db.query(Transaction, TransactionItem, Product, Category) \
@@ -58,7 +57,7 @@ def make_transactions_report(db: Session, shop: Shop, admin: Employee):
         writer.writeheader()
         for row in report_data:
             writer.writerow(row)
-            
+        
     db.query(TransactionItem).delete()
     db.query(Transaction).delete()
     db.commit()
