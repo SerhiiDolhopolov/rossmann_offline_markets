@@ -1,35 +1,33 @@
-import os
 import asyncio
+import json
 from pathlib import Path
 import datetime
 from datetime import timezone
 
-from app.services.buy_service import pay_for_products
-from app.services.delivery_service import do_delivery
-from app.services.transactions_service import make_transactions_report
-
 from db import init_db, get_db
+from app import Shop, Employee
+from app.config import SHOP_ID, ADMIN_EMAIL, COURIER_EMAIL, CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
+from app.config import KAFKA_TOPIC_LOCAL_DB_UPDATE_CATEGORY
+from app.services.products_service import pay_for_products, do_delivery, get_quantity_of_updated_products
+from app.services.transactions_service import make_transactions_report
+from app.services.sync_service import sync_category
+from kafka.producer import init_producer, close_producer, update_products_quantity_to_oltp
+from kafka.consumer import consume_messages
 from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, get_id_available_terminals
 from oltp_sync import sync_categories, sync_products
-from app import Shop, Employee
 
 
 START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
-TIME_STEP = 0.01
+TIME_STEP = 1
 MINUTES_STEP = 5
+TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
 current_day = 1
 product_price_factor = 1.0
+
 
 shop: Shop = None
 admin: Employee = None
 courier: Employee = None
-
-SHOP_ID = os.getenv('SHOP_ID')
-ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
-COURIER_EMAIL = os.getenv('COURIER_EMAIL')
-CASHIER_1_EMAIL = os.getenv('CASHIER_1_EMAIL')
-CASHIER_2_EMAIL = os.getenv('CASHIER_2_EMAIL')
-CASHIER_3_EMAIL = os.getenv('CASHIER_3_EMAIL')
 
 
 class PatchedDateTime(datetime.datetime):
@@ -48,21 +46,38 @@ datetime.datetime = PatchedDateTime
 async def main():
     global current_day, product_price_factor
     
+    init_db()
+    
     asyncio.create_task(start_time())
+        
     # 60 days
     for current_day in range(current_day, 61):  
         print(datetime.datetime.now())
         if current_day % 20 == 0:
             product_price_factor += 0.05
         await start_work_shift()
-
+        
+        
+async def start_kafka_producer():
+    await init_producer()  
+    while True:
+        db = next(get_db())
+        try:
+            updated_items = get_quantity_of_updated_products(db)
+            print(f"Updated items: {updated_items}")
+            if updated_items:
+                await update_products_quantity_to_oltp(updated_items)
+        finally:
+            db.close()
+        await asyncio.sleep(TIME_KAFKA_SEND_UPDATE_TO_OLTP)
+    await close_producer()
+    
 async def start_work_shift():    
     global shop, admin, courier, working_time
     
     while datetime.datetime.now().hour < 9:
         await asyncio.sleep(TIME_STEP)
     
-    init_db()
     shop = authorize_shop(SHOP_ID, 'password')
     if shop:
         print(f"Shop {shop.shop_id} is authorized.")
@@ -94,6 +109,9 @@ async def start_work_shift():
     
     sync()
     print(f'Work is started {datetime.datetime.now()}')
+    asyncio.create_task(start_kafka_producer())
+    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPDATE_CATEGORY: sync_category_by_kafka}))
+    
     
     task_delivery = asyncio.create_task(start_delivery_process())
     task1 = asyncio.create_task(start_cashier_working(terminals[0], CASHIER_1_EMAIL, 'password'))
@@ -108,23 +126,7 @@ async def start_work_shift():
         make_transactions_report(db, shop, admin)
     finally:
         db.close()
-    
-def sync():
-    path = Path(f"sync_time_{shop.shop_id}")
-    if path.exists():
-        sync_time = path.read_text()
-    else:
-        sync_time = datetime.datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
-        
-    db = next(get_db())
-    try:
-        sync_categories(db, sync_time)
-        sync_products(db, shop.shop_id, sync_time)
-        print("Synchronized successfully.")
-    finally:
-        db.close()
-        path.write_text(datetime.datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
-           
+
 async def start_time():
     while True:
         await asyncio.sleep(TIME_STEP)
@@ -156,6 +158,46 @@ async def start_cashier_working(terminal_id, email: str, password: str):
         finally:
             db.close()
         await asyncio.sleep(TIME_STEP)
+        
+
+    
+async def sync_category_by_kafka(value: str):
+    data = json.loads(value)
+    sync_time = get_sync_time()
+    if data['last_updated_utc'] <= sync_time:
+        return
+        
+    db = next(get_db())
+    try:
+        sync_category(
+            db,
+            is_deleted=data['is_deleted'],
+            category_id=int(data['category_id']),
+            name=data['name'],
+            description=data['description']
+        )
+    finally:
+        db.close()        
+
+def sync():
+    sync_time = get_sync_time()
+        
+    db = next(get_db())
+    try:
+        sync_categories(db, sync_time)
+        sync_products(db, shop.shop_id, sync_time)
+        print("Synchronized successfully.")
+    finally:
+        db.close()
+        
+def get_sync_time():
+    path = Path(f"sync_time_{shop.shop_id}")
+    if path.exists():
+        sync_time = path.read_text()
+    else:
+        sync_time = datetime.datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
+    path.write_text(datetime.datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
+    return sync_time
         
     
 if __name__ == "__main__":

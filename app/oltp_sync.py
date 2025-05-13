@@ -1,5 +1,3 @@
-import os
-from dotenv import load_dotenv
 import requests
 
 from sqlalchemy.orm import Session
@@ -7,15 +5,11 @@ from sqlalchemy.orm import Session
 from app import Employee
 from app import Shop
 from app.services.sync_service import sync_category, sync_product
+from app.config import OLTP_API_HOST, OLTP_API_PORT
 
 
-load_dotenv()
-
-OLTP_HOST = os.getenv("OLTP_HOST")
-OLTP_PORT = os.getenv("OLTP_PORT")
-
-API_URL = 'http://{OLTP_HOST}:{OLTP_PORT}'.format(OLTP_HOST=OLTP_HOST, 
-                                           OLTP_PORT=OLTP_PORT)
+API_URL = 'http://{OLTP_HOST}:{OLTP_PORT}'.format(OLTP_HOST=OLTP_API_HOST, 
+                                                  OLTP_PORT=OLTP_API_PORT)
 
 def authorize_shop(shop_id: int, password: str) -> Shop | None:
     url = '{API_URL}/shops/authorize?shop_id={shop_id}&password={password}'.format(
