@@ -18,7 +18,7 @@ from rossmann_sync_schemas import CategorySchema
 
 
 START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
-TIME_STEP = 1
+TIME_STEP = 0.01
 MINUTES_STEP = 5
 TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
 current_day = 1
@@ -45,12 +45,9 @@ datetime.datetime = PatchedDateTime
 
 async def main():
     global current_day, product_price_factor
-    
     init_db()
-    
     asyncio.create_task(start_time())
-        
-    # 60 days
+    asyncio.create_task(start_kafka_producer())
     for current_day in range(current_day, 61):  
         print(datetime.datetime.now())
         if current_day % 20 == 0:
@@ -59,18 +56,21 @@ async def main():
         
         
 async def start_kafka_producer():
-    await init_producer()  
-    while True:
-        db = next(get_db())
-        try:
-            updated_items = get_quantity_of_updated_products(db)
-            print(f"Updated items: {updated_items}")
-            if updated_items:
-                await update_products_quantity_to_oltp(updated_items)
-        finally:
-            db.close()
-        await asyncio.sleep(TIME_KAFKA_SEND_UPDATE_TO_OLTP)
-    await close_producer()
+    try:
+        await init_producer()  
+        while True:
+            db = next(get_db())
+            try:
+                updated_items = get_quantity_of_updated_products(db)
+                print(f"Updated items: {updated_items}")
+                if updated_items:
+                    await update_products_quantity_to_oltp(updated_items)
+            finally:
+                db.close()
+            await asyncio.sleep(TIME_KAFKA_SEND_UPDATE_TO_OLTP)
+    finally:
+        await close_producer()
+        print("Kafka producer closed.")
     
 async def start_work_shift():    
     global shop, admin, courier, working_time
@@ -109,7 +109,6 @@ async def start_work_shift():
     
     sync()
     print(f'Work is started {datetime.datetime.now()}')
-    asyncio.create_task(start_kafka_producer())
     asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
     
     
@@ -120,12 +119,13 @@ async def start_work_shift():
     
     await asyncio.gather(task_delivery, task1, task2, task3)
     print(f'Work is ended {datetime.datetime.now()}')
-    datetime.datetime.add_minutes(11 * 60)
     db = next(get_db())
     try:
         make_transactions_report(db, shop, admin)
     finally:
         db.close()
+    datetime.datetime.add_minutes(11 * 60)
+    
 
 async def start_time():
     while True:

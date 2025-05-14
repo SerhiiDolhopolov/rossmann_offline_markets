@@ -20,7 +20,7 @@ def select_products(db: Session):
                                     Product.is_deleted == False) \
                            .all()
     if not available_products:
-        print("No products available.")
+        #print("No products available.")
         return
     
     possible_count = [i for i in range(1, min(8, len(available_products)) + 1)]
@@ -44,7 +44,7 @@ def pay_for_products(db: Session, terminal_id: int, cashier: Employee, factor: f
     
     products = select_products(db)
     if not products:
-        print("No products selected.")
+        #print("No products selected.")
         return
     
     transaction_items = []
@@ -89,8 +89,8 @@ def pay_for_products(db: Session, terminal_id: int, cashier: Employee, factor: f
     db.add(transaсtion)
     db.commit()
     db.refresh(transaсtion)
-    print(f"Transaction completed. Transaction ID: {transaсtion.transaction_id}")
-    print(f"Total amount: {transaсtion.amount}")
+    #print(f"Transaction completed. Transaction ID: {transaсtion.transaction_id}")
+    #print(f"Total amount: {transaсtion.amount}")
     
     
 def do_delivery(db: Session, shop: Shop, admin: Employee, courier: Employee) -> None:

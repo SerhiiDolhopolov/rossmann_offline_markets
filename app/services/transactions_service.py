@@ -1,10 +1,12 @@
 import csv
-from sqlalchemy.orm import Session
-from pathlib import Path
+import io
 import datetime
 
-from app.models import Transaction, TransactionItem, Product, Category
+from sqlalchemy.orm import Session
+
 from app import Shop, Employee
+from app.models import Transaction, TransactionItem, Product, Category
+from app.datalake import save_transactions_report
 
 
 def make_transactions_report(db: Session, shop: Shop, admin: Employee):
@@ -15,7 +17,6 @@ def make_transactions_report(db: Session, shop: Shop, admin: Employee):
             .join(Category, Product.category_id == Category.category_id) \
             .all()
             
-    
     if not transactions_info:
         print("No transactions for report.")
         return
@@ -47,16 +48,14 @@ def make_transactions_report(db: Session, shop: Shop, admin: Employee):
         })
     report_data.sort(key=lambda x: (x['transaction_id'], x['product_id']))
     fieldnames = report_data[0].keys()
-    path = Path('transactions')
-    if not path.exists():
-        path.mkdir(parents=True, exist_ok=True)
-    date = datetime.datetime.now().date()
-    filename = path / f'transactions_report_shop_{shop.shop_id}_{date}.csv'
-    with open(filename, mode='w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in report_data:
-            writer.writerow(row)
+    
+    csv_buffer = io.StringIO()
+    writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in report_data:
+        writer.writerow(row)
+    csv_bytes = io.BytesIO(csv_buffer.getvalue().encode('utf-8'))
+    save_transactions_report(csv_bytes, shop.shop_id, datetime.datetime.now().date())
         
     db.query(TransactionItem).delete()
     db.query(Transaction).delete()
