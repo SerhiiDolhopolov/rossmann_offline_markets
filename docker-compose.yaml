@@ -13,7 +13,7 @@ services:
     image: postgres:latest
     restart: always
     ports:
-      - 3000:5432
+      - 2000:5432
     environment:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
@@ -31,7 +31,7 @@ services:
     image: postgres:latest
     restart: always
     ports:
-      - 3001:5432
+      - 2001:5432
     environment:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
@@ -49,7 +49,7 @@ services:
     image: postgres:latest
     restart: always
     ports:
-      - 3002:5432
+      - 2002:5432
     environment:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
