@@ -1,6 +1,7 @@
 import json
 
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaConnectionError
 
 from app.config import KAFKA_HOST, KAFKA_PORT, KAFKA_TOPIC_OLTP_UPDATE_PRODUCT_QUANTITY, SHOP_ID
 
@@ -15,6 +16,15 @@ async def init_producer():
 
 async def close_producer():
     await producer.stop()
+    
+async def send_with_reconnect(topic, payload, headers, key = None):
+    global producer
+    try:
+        await producer.send_and_wait(topic, payload, headers=headers, key=key)
+    except KafkaConnectionError:
+        await close_producer()
+        await init_producer()
+        await producer.send_and_wait(topic, payload, headers=headers, key=key)
 
 async def update_products_quantity_to_oltp(updated_products: dict[int, int]):
     topic = KAFKA_TOPIC_OLTP_UPDATE_PRODUCT_QUANTITY
@@ -24,4 +34,4 @@ async def update_products_quantity_to_oltp(updated_products: dict[int, int]):
         }
     key = str(SHOP_ID).encode()
     print(f"Sending products quantity: {payload} with key: {key}")
-    await producer.send_and_wait(topic, json.dumps(payload).encode(), key=key)
+    await send_with_reconnect(topic, json.dumps(payload).encode(), key=key)
