@@ -6,15 +6,15 @@ from datetime import timezone
 from db import init_db, get_db
 from app import Shop, Employee
 from app.config import SHOP_ID, ADMIN_EMAIL, COURIER_EMAIL, CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
-from app.config import KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY
+from app.config import KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY, KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT
 from app.services.products_service import pay_for_products, do_delivery, get_quantity_of_updated_products
 from app.services.transactions_service import make_transactions_report
-from app.services.sync_service import sync_category
+from app.services.sync_service import sync_category, sync_product
 from kafka.producer import init_producer, close_producer, update_products_quantity_to_oltp
 from kafka.consumer import consume_messages
 from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, get_id_available_terminals
 from oltp_sync import sync_categories, sync_products
-from rossmann_sync_schemas import CategorySchema
+from rossmann_sync_schemas import CategorySchema, ProductSchema
 
 
 START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
@@ -46,8 +46,11 @@ datetime.datetime = PatchedDateTime
 async def main():
     global current_day, product_price_factor
     init_db()
+    sync()
     asyncio.create_task(start_time())
     asyncio.create_task(start_kafka_producer())
+    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
+    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT: sync_product_by_kafka}))
     for current_day in range(current_day, 61):  
         print(datetime.datetime.now())
         if current_day % 20 == 0:
@@ -107,10 +110,7 @@ async def start_work_shift():
                 return
             print(f"Terminal {terminal} is authorized.")
     
-    sync()
-    print(f'Work is started {datetime.datetime.now()}')
-    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
-    
+    print(f'Work is started {datetime.datetime.now()}')    
     
     task_delivery = asyncio.create_task(start_delivery_process())
     task1 = asyncio.create_task(start_cashier_working(terminals[0], CASHIER_1_EMAIL, 'password'))
@@ -160,7 +160,33 @@ async def start_cashier_working(terminal_id, email: str, password: str):
         await asyncio.sleep(TIME_STEP)
         
 
+async def sync_product_by_kafka(value: str, updated_at_utc: datetime):
+    try:
+        product = ProductSchema.model_validate_json(value)  
+    except Exception as e:
+        print(f"Error parsing product data: {e}")
+        return
+    sync_time = get_sync_time()
     
+    if updated_at_utc <= sync_time:
+        return
+    
+    db = next(get_db())
+    try:
+        sync_product(
+            db,
+            is_deleted=product.is_deleted,
+            product_id=product.product_id,
+            name=product.name,
+            description=product.description,
+            barcode=product.barcode,
+            category_id=product.category_id,
+            price=product.price,
+            discount=product.discount,
+        )
+    finally:
+        db.close()
+
 async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
     try:
         category = CategorySchema.model_validate_json(value)  
