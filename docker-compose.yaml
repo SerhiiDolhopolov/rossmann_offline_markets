@@ -20,9 +20,9 @@ services:
       POSTGRES_DB: $POSTGRES_DB
     healthcheck:
         test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-        interval: 5s
-        timeout: 5s
-        retries: 5
+        interval: 10s
+        timeout: 10s
+        retries: 12
 
   local_db_2:
     container_name: offline-market-db-2
@@ -38,9 +38,9 @@ services:
       POSTGRES_DB: $POSTGRES_DB
     healthcheck:
         test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-        interval: 5s
-        timeout: 5s
-        retries: 5
+        interval: 10s
+        timeout: 10s
+        retries: 12
 
   local_db_3:
     container_name: offline-market-db-3
@@ -56,9 +56,9 @@ services:
       POSTGRES_DB: $POSTGRES_DB
     healthcheck:
         test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-        interval: 5s
-        timeout: 5s
-        retries: 5
+        interval: 10s
+        timeout: 10s
+        retries: 12
 
   local_app_1:
     container_name: offline-market-app-1
@@ -84,7 +84,8 @@ services:
       CASHIER_1_EMAIL: 'renly.baratheon@example.com'
       CASHIER_2_EMAIL: 'davos.seaworth@example.com'
       CASHIER_3_EMAIL: 'robert.baratheon@example.com'
-    restart: on-failure
+    restart: on-failure:3
+
 
   local_app_2:
     container_name: offline-market-app-2
@@ -110,7 +111,7 @@ services:
       CASHIER_1_EMAIL: 'robb.stark@example.com'
       CASHIER_2_EMAIL: 'jon.snow@example.com'
       CASHIER_3_EMAIL: 'catelyn.stark@example.com'
-    restart: on-failure
+    restart: on-failure:3
 
   local_app_3:
     container_name: offline-market-app-3
@@ -136,4 +137,4 @@ services:
       CASHIER_1_EMAIL: 'tyrion.lannister@example.com'
       CASHIER_2_EMAIL: 'jaime.lannister@example.com'
       CASHIER_3_EMAIL: 'cersei.lannister@example.com'
-    restart: on-failure
+    restart: on-failure:3

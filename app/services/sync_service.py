@@ -58,3 +58,21 @@ def sync_product(db: Session,
             })
     db.execute(stmt)
     db.commit()
+    
+def update_product_desc(db: Session, 
+                        is_deleted: bool,
+                        product_id: int,
+                        name: str, 
+                        description: str = None,
+                        barcode: str = None):
+    product = db.query(Product).filter(Product.product_id == product_id).first()
+    if product:
+        product.name = name
+        product.description = description
+        product.barcode = barcode
+        product.is_deleted = is_deleted
+        db.commit()
+    else:
+        return
+    
+    db.commit()
