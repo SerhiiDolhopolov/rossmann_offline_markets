@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-import datetime
+import datetime 
 from datetime import timezone
 
 from db import init_db, get_db
@@ -40,13 +40,13 @@ class PatchedDateTime(datetime.datetime):
     @classmethod
     def add_minutes(cls, minutes):
         cls._fake_now += datetime.timedelta(minutes=minutes)
-        
+
+original_datetime = datetime.datetime
 datetime.datetime = PatchedDateTime
 
 async def main():
     global current_day, product_price_factor
     init_db()
-    sync()
     asyncio.create_task(start_time())
     asyncio.create_task(start_kafka_producer())
     asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
@@ -59,6 +59,7 @@ async def main():
         
         
 async def start_kafka_producer():
+    print('producrer started')
     try:
         await init_producer()  
         while True:
@@ -111,6 +112,7 @@ async def start_work_shift():
             print(f"Terminal {terminal} is authorized.")
     
     print(f'Work is started {datetime.datetime.now()}')    
+    sync()
     
     task_delivery = asyncio.create_task(start_delivery_process())
     task1 = asyncio.create_task(start_cashier_working(terminals[0], CASHIER_1_EMAIL, 'password'))
@@ -222,15 +224,16 @@ def sync():
     finally:
         db.close()
         
-def get_sync_time() -> datetime:
+def get_sync_time() -> 'original_datetime':
     path = Path(f"sync_time_{shop.shop_id}")
     if path.exists():
-        sync_time = path.read_text()
-        sync_time = datetime.datetime.fromisoformat(sync_time.replace('Z', '+00:00'))
+        sync_time_str = path.read_text()
+        sync_time = original_datetime.fromisoformat(sync_time_str.replace('Z', '+00:00'))
     else:
-        sync_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
-            
-    path.write_text(datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'))
+        sync_time = original_datetime.min.replace(tzinfo=timezone.utc)
+    
+    current_time = original_datetime.now(tz=timezone.utc)
+    path.write_text(current_time.isoformat().replace('+00:00', 'Z'))
     return sync_time
         
     

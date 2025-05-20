@@ -17,7 +17,9 @@ async def init_producer():
 async def close_producer():
     await producer.stop()
     
-async def send_with_reconnect(topic, payload, headers, key = None):
+async def send_with_reconnect(topic, payload, headers=None, key = None):
+    if not headers:
+        headers = []
     global producer
     try:
         await producer.send_and_wait(topic, payload, headers=headers, key=key)
@@ -34,4 +36,4 @@ async def update_products_quantity_to_oltp(updated_products: dict[int, int]):
         }
     key = str(SHOP_ID).encode()
     print(f"Sending products quantity: {payload} with key: {key}")
-    await send_with_reconnect(topic, json.dumps(payload).encode(), key=key)
+    await send_with_reconnect(topic, json.dumps(payload).encode(), headers=None, key=key)
