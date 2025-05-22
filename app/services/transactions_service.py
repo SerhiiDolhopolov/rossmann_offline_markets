@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import Shop, Employee
 from app.models import Transaction, TransactionItem, Product, Category
-from app.datalake import save_transactions_report
+from app.s3 import save_transactions_report
 
 
 def make_transactions_report(db: Session, shop: Shop, admin: Employee):

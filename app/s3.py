@@ -5,13 +5,13 @@ from pathlib import Path
 from minio import Minio
 from minio.error import S3Error
 
-from app.config import MINIO_HOST, MINIO_PORT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
+from app.config import S3_HOST, S3_PORT, S3_ACCESS_KEY, S3_SECRET_KEY
 
 
-endpoint = f"{MINIO_HOST}:{MINIO_PORT}"
+endpoint = f"{S3_HOST}:{S3_PORT}"
 client = Minio(endpoint=endpoint,
-               access_key=MINIO_ACCESS_KEY,
-               secret_key=MINIO_SECRET_KEY,
+               access_key=S3_ACCESS_KEY,
+               secret_key=S3_SECRET_KEY,
                secure=False,
                )
 

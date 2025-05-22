@@ -61,7 +61,7 @@ async def main():
         
         
 async def start_kafka_producer():
-    print('producrer started')
+    print('Kafka producer started')
     try:
         await init_producer()  
         while True:
@@ -142,7 +142,7 @@ async def start_delivery_process():
         if (now.hour, now.minute) in [(10, 0), (18, 0)]:
             db = next(get_db())
             try:
-                do_delivery(db, shop, admin, courier)
+                await do_delivery(db, shop, admin, courier)
             finally:
                 db.close()
         await asyncio.sleep(TIME_STEP)
