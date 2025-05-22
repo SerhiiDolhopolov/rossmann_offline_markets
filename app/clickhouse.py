@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 from aiochclient import ChClient
 
-from app.config import CLICKHOUSE_HOST, CLICKHOUSE_HTTP_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DELIBERY_DB
+from app.config import CLICKHOUSE_HOST, CLICKHOUSE_HTTP_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DELIVERY_DB
 
 
 clickhouse_url = 'http://{host}:{port}'.format(
@@ -86,7 +86,7 @@ async def get_delivery_client():
                       url=clickhouse_url,
                       user=CLICKHOUSE_USER, 
                       password=CLICKHOUSE_PASSWORD, 
-                      database=CLICKHOUSE_DELIBERY_DB)
+                      database=CLICKHOUSE_DELIVERY_DB)
     print(f"Connecting to ClickHouse at {clickhouse_url}...")
     try:
         await client.execute("SELECT 1")
