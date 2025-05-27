@@ -1,34 +1,37 @@
-import asyncio
-from pathlib import Path
-import datetime 
+import logging
+import datetime
 from datetime import timezone
+from pathlib import Path
+import asyncio
 
 from db import init_db, get_db
 from app import Shop, Employee
-from app.config import SHOP_ID, ADMIN_EMAIL, COURIER_EMAIL, CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
+from app.config import init_logging
+from app.config import SHOP_ID, ADMIN_EMAIL, COURIER_EMAIL
+from app.config import CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
 from app.config import KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY, KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT
 from app.config import KAFKA_TOPIC_LOCAL_DB_UPDATE_PRODUCT_DESC
-from app.services.products_service import pay_for_products, do_delivery, get_quantity_of_updated_products
+from app.services.products_service import (
+    pay_for_products,
+    do_delivery,
+    get_quantity_of_updated_products,
+)
 from app.services.transactions_service import make_transactions_report
 from app.services.sync_service import sync_category, sync_product, update_product_desc
 from kafka.producer import init_producer, close_producer, update_products_quantity_to_oltp
 from kafka.consumer import consume_messages
-from oltp_sync import authorize_shop, authorize_employee, authorize_terminal, get_id_available_terminals
+from oltp_sync import authorize_shop, authorize_employee, authorize_terminal
+from oltp_sync import get_id_available_terminals
 from oltp_sync import sync_categories, sync_products
 from rossmann_sync_schemas import CategorySchema, ProductSchema, ProductDescSchema
 
+init_logging()
+logger = logging.getLogger(__name__)
 
 START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
-TIME_STEP = 0.01
+TIME_STEP = 1
 MINUTES_STEP = 5
 TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
-current_day = 1
-product_price_factor = 1.0
-
-
-shop: Shop = None
-admin: Employee = None
-courier: Employee = None
 
 
 class PatchedDateTime(datetime.datetime):
@@ -42,139 +45,203 @@ class PatchedDateTime(datetime.datetime):
     def add_minutes(cls, minutes):
         cls._fake_now += datetime.timedelta(minutes=minutes)
 
+
 original_datetime = datetime.datetime
 datetime.datetime = PatchedDateTime
 
+
 async def main():
-    global current_day, product_price_factor
+    updated_products_id = set()
     init_db()
     asyncio.create_task(start_time())
-    asyncio.create_task(start_kafka_producer())
-    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}))
-    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT: sync_product_by_kafka}))
-    asyncio.create_task(consume_messages({KAFKA_TOPIC_LOCAL_DB_UPDATE_PRODUCT_DESC: update_product_desc_by_kafka}))
-    for current_day in range(current_day, 61):  
-        print(datetime.datetime.now())
+    asyncio.create_task(start_kafka_producer(updated_products_id))
+    asyncio.create_task(
+        consume_messages(
+            {KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka}
+        )
+    )
+    asyncio.create_task(
+        
+        consume_messages(
+            {KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT: sync_product_by_kafka}
+        )
+    )
+    asyncio.create_task(
+        consume_messages(
+            {KAFKA_TOPIC_LOCAL_DB_UPDATE_PRODUCT_DESC: update_product_desc_by_kafka}
+        )
+    )
+
+    product_price_factor = 1.0
+    for current_day in range(1, 61):
         if current_day % 20 == 0:
             product_price_factor += 0.05
-        await start_work_shift()
-        
-        
-async def start_kafka_producer():
-    print('Kafka producer started')
+        await start_work_shift(updated_products_id, product_price_factor)
+
+
+async def start_kafka_producer(updated_products_id: set[int]):
+    logger.info("Starting Kafka producer...")
     try:
-        await init_producer()  
+        producer = await init_producer()
         while True:
             db = next(get_db())
             try:
-                updated_items = get_quantity_of_updated_products(db)
-                print(f"Updated items: {updated_items}")
-                if updated_items:
-                    await update_products_quantity_to_oltp(updated_items)
+                updated_products = get_quantity_of_updated_products(db, updated_products_id)
+                logger.debug(f"Updated products: {updated_products}")
+                if updated_products:
+                    producer = await update_products_quantity_to_oltp(producer, updated_products)
             finally:
                 db.close()
             await asyncio.sleep(TIME_KAFKA_SEND_UPDATE_TO_OLTP)
     finally:
-        await close_producer()
-        print("Kafka producer closed.")
-    
-async def start_work_shift():    
-    global shop, admin, courier, working_time
-    
+        await close_producer(producer)
+        logger.info("Kafka producer closed.")
+
+
+async def start_work_shift(
+    updated_products_id: set[int], 
+    product_price_factor: float = 1.0
+):
     while datetime.datetime.now().hour < 9:
         await asyncio.sleep(TIME_STEP)
-    
-    shop = authorize_shop(SHOP_ID, 'password')
+
+    shop = authorize_shop(SHOP_ID, "password")
     if shop:
-        print(f"Shop {shop.shop_id} is authorized.")
+        logger.info(f"Shop %s is authorized.", SHOP_ID)
     else:
-        print(f"Authorization {shop.shop_id} failed.")
+        logger.error(f"Authorization %s failed.", SHOP_ID)
         return
-    
-    admin = authorize_employee(ADMIN_EMAIL, 'password')
+
+    admin = authorize_employee(ADMIN_EMAIL, "password")
     if admin:
-        print(f"Admin {admin.first_name} is authorized.")
+        logger.info(f"Admin %s is authorized.", ADMIN_EMAIL)
     else:
-        print(f"Authorization {admin.first_name} failed.")
+        logger.error(f"Authorization %s failed.", ADMIN_EMAIL)
         return
-    
-    courier = authorize_employee(COURIER_EMAIL, 'password')
+
+    courier = authorize_employee(COURIER_EMAIL, "password")
     if courier:
-        print(f"Courier {courier.first_name} is authorized.")
+        logger.info(f"Courier %s is authorized.", COURIER_EMAIL)
     else:
-        print(f"Authorization {courier.first_name} failed.")
+        logger.error(f"Authorization %s failed.", COURIER_EMAIL)
         return
-    
+
     terminals = get_id_available_terminals(shop.shop_id)
     if terminals:
         for terminal in terminals:
-            if not authorize_terminal(shop.shop_id, terminal, 'password'):
-                print(f"Authorization terminal {terminal} failed.")
+            if not authorize_terminal(shop.shop_id, terminal, "password"):
+                logger.error(f"Authorization terminal %s failed.", terminal)
                 return
-            print(f"Terminal {terminal} is authorized.")
+            logger.info(f"Terminal %s is authorized.", terminal)
+    else:
+        logger.error("No available terminals found for the shop.")
+        return
+    logger.info("Work is started %s", datetime.datetime.now())
+    sync(shop)
+
+    task_delivery = asyncio.create_task(
+        start_delivery_process(
+            shop,
+            admin,
+            courier,
+            updated_products_id,
+        )
+    )
     
-    print(f'Work is started {datetime.datetime.now()}')    
-    sync()
+    task_cashier_1, task_cashier_2, task_cashier_3 = tuple(
+        asyncio.create_task(
+            start_cashier_working(
+                terminal,
+                email,
+                "password",
+                updated_products_id=updated_products_id,
+                product_price_factor=product_price_factor
+            )
+        )
+        for terminal, email in zip(terminals, [
+            CASHIER_1_EMAIL, CASHIER_2_EMAIL, CASHIER_3_EMAIL
+        ])
+    )
+
+    await asyncio.gather(
+        task_delivery, 
+        task_cashier_1, 
+        task_cashier_2, 
+        task_cashier_3
+    )
+    logger.info("Work is ended %s", datetime.datetime.now())
     
-    task_delivery = asyncio.create_task(start_delivery_process())
-    task1 = asyncio.create_task(start_cashier_working(terminals[0], CASHIER_1_EMAIL, 'password'))
-    task2 = asyncio.create_task(start_cashier_working(terminals[1], CASHIER_2_EMAIL, 'password'))
-    task3 = asyncio.create_task(start_cashier_working(terminals[2], CASHIER_3_EMAIL, 'password'))
-    
-    await asyncio.gather(task_delivery, task1, task2, task3)
-    print(f'Work is ended {datetime.datetime.now()}')
     db = next(get_db())
     try:
-        make_transactions_report(db, shop, admin)
+        await make_transactions_report(db, shop, admin)
     finally:
         db.close()
     datetime.datetime.add_minutes(11 * 60)
-    
+
 
 async def start_time():
     while True:
         await asyncio.sleep(TIME_STEP)
         datetime.datetime.add_minutes(MINUTES_STEP)
-        
-async def start_delivery_process():
+
+
+async def start_delivery_process(
+    shop: Shop,
+    admin: Employee,
+    courier: Employee,
+    updated_products_id: set[int],
+):
     while 9 <= datetime.datetime.now().hour < 21:
         now = datetime.datetime.now()
         if (now.hour, now.minute) in [(10, 0), (18, 0)]:
             db = next(get_db())
             try:
-                await do_delivery(db, shop, admin, courier)
+                await do_delivery(db, shop, admin, courier, updated_products_id)
             finally:
                 db.close()
         await asyncio.sleep(TIME_STEP)
-    
-async def start_cashier_working(terminal_id, email: str, password: str):
+
+
+async def start_cashier_working(
+    terminal_id,
+    email: str,
+    password: str,
+    updated_products_id: set[int], 
+    product_price_factor: float = 1.0
+):
     employee = authorize_employee(email, password)
     if employee:
-        print(f"Employee {employee.first_name} is authorized. Terminal ID: {terminal_id}")
+        logger.info("Employee %s is authorized.", email)
     else:
-        print(f"Authorization {shop.shop_id} failed.")
+        logger.error("Authorization %s failed.", email)
         return
-    
+
     while 9 <= datetime.datetime.now().hour < 21:
         db = next(get_db())
         try:
-            pay_for_products(db, terminal_id, employee, factor=product_price_factor)
+            pay_for_products(
+                db=db,
+                terminal_id=terminal_id,
+                cashier=employee,
+                updated_products_id=updated_products_id,
+                factor=product_price_factor
+            )
         finally:
             db.close()
         await asyncio.sleep(TIME_STEP)
-        
+
 
 async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
     try:
-        category = CategorySchema.model_validate_json(value)  
+        category = CategorySchema.model_validate_json(value)
     except Exception as e:
-        print(f"Error parsing category data: {e}")
+        logger.error(f"Error parsing category data: %s", e, exc_info=True)
         return
     sync_time = get_sync_time()
-    
+
     if updated_at_utc <= sync_time:
         return
-    
+
     db = next(get_db())
     try:
         sync_category(
@@ -184,20 +251,25 @@ async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
             name=category.name,
             description=category.description,
         )
+        logger.info(
+            "Category updated successfully for category ID %s",
+            category.category_id,
+        )
     finally:
-        db.close()  
-        
+        db.close()
+
+
 async def sync_product_by_kafka(value: str, updated_at_utc: datetime):
     try:
-        product = ProductSchema.model_validate_json(value)  
+        product = ProductSchema.model_validate_json(value)
     except Exception as e:
-        print(f"Error parsing product data: {e}")
+        logger.error(f"Error parsing product data: %s", e, exc_info=True)
         return
     sync_time = get_sync_time()
-    
+
     if updated_at_utc <= sync_time:
         return
-    
+
     db = next(get_db())
     try:
         sync_product(
@@ -211,20 +283,26 @@ async def sync_product_by_kafka(value: str, updated_at_utc: datetime):
             price=product.price,
             discount=product.discount,
         )
+        update_sync_time(updated_at_utc)
+        logger.info(
+            "Product updated successfully for product ID %s",
+            product.product_id,
+        )
     finally:
         db.close()
-        
+
+
 async def update_product_desc_by_kafka(value: str, updated_at_utc: datetime):
     try:
-        product_desc = ProductDescSchema.model_validate_json(value)  
+        product_desc = ProductDescSchema.model_validate_json(value)
     except Exception as e:
-        print(f"Error parsing product data: {e}")
+        logger.error(f"Error parsing product description data: %s", e, exc_info=True)
         return
     sync_time = get_sync_time()
-    
+
     if updated_at_utc <= sync_time:
         return
-    
+
     db = next(get_db())
     try:
         update_product_desc(
@@ -233,36 +311,64 @@ async def update_product_desc_by_kafka(value: str, updated_at_utc: datetime):
             product_id=product_desc.product_id,
             name=product_desc.name,
             description=product_desc.description,
-            barcode=product_desc.barcode
+            barcode=product_desc.barcode,
+        )
+        update_sync_time(updated_at_utc)
+        logger.info(
+            "Product description updated successfully for product ID %s",
+            product_desc.product_id,
         )
     finally:
         db.close()
-        
 
-def sync():
+
+def sync(shop):
     sync_time = get_sync_time()
-        
     db = next(get_db())
     try:
-        sync_time = sync_time.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
-        sync_categories(db, sync_time)
-        sync_products(db, shop.shop_id, sync_time)
-        print("Synchronized successfully.")
+        sync_time_str = sync_time.isoformat().replace("+00:00", "Z")
+        max_sync_time_cat = sync_categories(db, sync_time_str)
+        max_sync_time_prod = sync_products(db, shop.shop_id, sync_time_str)
+        max_sync_time = max(max_sync_time_cat, max_sync_time_prod)
+        if max_sync_time > sync_time:
+            update_sync_time(max_sync_time)
+            logger.info(
+                "Sync time updated to %s",
+                max_sync_time.isoformat(),
+            )
+        logger.info("Categories and products start synchronized successfully.")
     finally:
         db.close()
-        
-def get_sync_time() -> 'original_datetime':
-    path = Path(f"sync_time_{shop.shop_id}")
+
+
+def get_sync_time() -> "original_datetime":
+    path = Path(f"sync_time_{SHOP_ID}")
     if path.exists():
-        sync_time_str = path.read_text()
-        sync_time = original_datetime.fromisoformat(sync_time_str.replace('Z', '+00:00'))
+        sync_time = path.read_text()
+        try:
+            sync_time = original_datetime.fromisoformat(sync_time)
+        except Exception as e:
+            logger.error(
+                "Failed to parse sync time from file %s: %s",
+                path,
+                e,
+                exc_info=True,
+            )
+            sync_time = original_datetime.min.replace(tzinfo=timezone.utc)
     else:
-        sync_time = original_datetime.min.replace(tzinfo=timezone.utc)
-    
-    current_time = original_datetime.now(tz=timezone.utc)
-    path.write_text(current_time.isoformat().replace('+00:00', 'Z'))
+        sync_time = (
+            original_datetime
+            .min
+            .replace(tzinfo=timezone.utc)
+        )
     return sync_time
-        
-    
+
+
+def update_sync_time(sync_time: "original_datetime"):
+    path = Path(f"sync_time_{SHOP_ID}")
+    path.write_text(sync_time.isoformat())
+    logger.debug("Sync time updated to %s", sync_time.isoformat())
+
+
 if __name__ == "__main__":
     asyncio.run(main())
