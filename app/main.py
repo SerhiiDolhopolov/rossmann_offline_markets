@@ -231,13 +231,15 @@ async def start_cashier_working(
         await asyncio.sleep(TIME_STEP)
 
 
-async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
+async def sync_category_by_kafka(value: str):
     try:
         category = CategorySchema.model_validate_json(value)
     except Exception as e:
         logger.error(f"Error parsing category data: %s", e, exc_info=True)
         return
+    
     sync_time = get_sync_time()
+    updated_at_utc = category.updated_at_utc
 
     if updated_at_utc <= sync_time:
         return
@@ -251,6 +253,7 @@ async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
             name=category.name,
             description=category.description,
         )
+        update_sync_time(updated_at_utc)
         logger.info(
             "Category updated successfully for category ID %s",
             category.category_id,
@@ -259,13 +262,15 @@ async def sync_category_by_kafka(value: str, updated_at_utc: datetime):
         db.close()
 
 
-async def sync_product_by_kafka(value: str, updated_at_utc: datetime):
+async def sync_product_by_kafka(value: str):
     try:
         product = ProductSchema.model_validate_json(value)
     except Exception as e:
         logger.error(f"Error parsing product data: %s", e, exc_info=True)
         return
+    
     sync_time = get_sync_time()
+    updated_at_utc = product.updated_at_utc
 
     if updated_at_utc <= sync_time:
         return
@@ -292,7 +297,7 @@ async def sync_product_by_kafka(value: str, updated_at_utc: datetime):
         db.close()
 
 
-async def update_product_desc_by_kafka(value: str, updated_at_utc: datetime):
+async def update_product_desc_by_kafka(value: str):
     try:
         product_desc = ProductDescSchema.model_validate_json(value)
     except Exception as e:
@@ -300,6 +305,7 @@ async def update_product_desc_by_kafka(value: str, updated_at_utc: datetime):
         return
     sync_time = get_sync_time()
 
+    updated_at_utc = product_desc.updated_at_utc
     if updated_at_utc <= sync_time:
         return
 
@@ -327,14 +333,14 @@ def sync(shop):
     db = next(get_db())
     try:
         sync_time_str = sync_time.isoformat().replace("+00:00", "Z")
-        max_sync_time_cat = sync_categories(db, sync_time_str)
-        max_sync_time_prod = sync_products(db, shop.shop_id, sync_time_str)
-        max_sync_time = max(max_sync_time_cat, max_sync_time_prod)
-        if max_sync_time > sync_time:
-            update_sync_time(max_sync_time)
+        max_updated_at_cat = sync_categories(db, sync_time_str)
+        max_updated_at_prod = sync_products(db, shop.shop_id, sync_time_str)
+        max_updated_at_time = max(max_updated_at_cat, max_updated_at_prod)
+        if max_updated_at_time > sync_time:
+            update_sync_time(max_updated_at_time)
             logger.info(
                 "Sync time updated to %s",
-                max_sync_time.isoformat(),
+                max_updated_at_time.isoformat(),
             )
         logger.info("Categories and products start synchronized successfully.")
     finally:

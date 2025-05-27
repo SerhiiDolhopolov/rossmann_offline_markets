@@ -108,7 +108,7 @@ def authorize_employee(email: str, password: str) -> Employee | None:
 
 
 def sync_categories(db: Session, sync_utc_isoZ_time: str) -> datetime:
-    """RETURNS the max last_updated_utc of all categories"""
+    """RETURNS the max updated_at_utc of all categories"""
     url = (
         f"{API_URL}/categories/sync?"
         f"sync_utc_time={sync_utc_isoZ_time}"
@@ -124,7 +124,7 @@ def sync_categories(db: Session, sync_utc_isoZ_time: str) -> datetime:
         )
         return None
     
-    max_last_updated_utc = datetime.min.replace(tzinfo=timezone.utc)
+    max_updated_at_utc = datetime.min.replace(tzinfo=timezone.utc)
     for category in json_response:
         category_schema = CategorySchema.model_validate(category)
         sync_category(
@@ -134,14 +134,14 @@ def sync_categories(db: Session, sync_utc_isoZ_time: str) -> datetime:
             name=category_schema.name,
             description=category_schema.description,
         )
-        last_updated_utc = category_schema.last_updated_utc
-        if last_updated_utc > max_last_updated_utc:
-            max_last_updated_utc = last_updated_utc
-    return max_last_updated_utc
+        updated_at_utc = category_schema.updated_at_utc
+        if updated_at_utc > max_updated_at_utc:
+            max_updated_at_utc = updated_at_utc
+    return max_updated_at_utc
 
 
 def sync_products(db: Session, shop_id: int, sync_utc_isoZ_time: str) -> datetime:
-    """RETURNS the max last_updated_utc of all products"""
+    """RETURNS the max updated_at_utc of all products"""
     url = (
         f"{API_URL}/products/sync?"
         f"shop_id={shop_id}&sync_utc_time={sync_utc_isoZ_time}"
@@ -158,7 +158,7 @@ def sync_products(db: Session, shop_id: int, sync_utc_isoZ_time: str) -> datetim
         )
         return None
 
-    max_last_updated_utc = datetime.min.replace(tzinfo=timezone.utc)
+    max_updated_at_utc = datetime.min.replace(tzinfo=timezone.utc)
     for product in json_response:
         product_schema = ProductSchema.model_validate(product)
         sync_product(
@@ -172,7 +172,7 @@ def sync_products(db: Session, shop_id: int, sync_utc_isoZ_time: str) -> datetim
             price=product_schema.price,
             discount=product_schema.discount,
         )
-        last_updated_utc = product_schema.last_updated_utc
-        if last_updated_utc > max_last_updated_utc:
-            max_last_updated_utc = last_updated_utc
-    return max_last_updated_utc
+        updated_at_utc = product_schema.updated_at_utc
+        if updated_at_utc > max_updated_at_utc:
+            max_updated_at_utc = updated_at_utc
+    return max_updated_at_utc

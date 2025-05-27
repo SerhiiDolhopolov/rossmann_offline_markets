@@ -35,33 +35,10 @@ async def consume_messages(topic_handlers: dict[str, Awaitable]):
                     topic,
                     value,
                 )
-                headers = {
-                    k: v.decode() if v else None
-                    for k, v in (msg.headers or [])
-                }
-                updated_at_utc = headers.get("updated_at_utc")
-                if not updated_at_utc:
-                    logger.warning(
-                        "No 'updated_at_utc' header found in message from topic '%s'",
-                        topic,
-                    )
-                    continue
-
-                try:
-                    updated_at_utc = datetime.fromisoformat(updated_at_utc)
-                except ValueError as e:
-                    logger.error(
-                        "Failed to parse 'updated_at_utc' header: %s. "
-                        "Value: %s",
-                        e,
-                        updated_at_utc,
-                        exc_info=True,
-                    )
-                    continue
-
+                
                 if topic in topic_handlers:
                     try:
-                        await topic_handlers[topic](value, updated_at_utc)
+                        await topic_handlers[topic](value)
                     except Exception as e:
                         logger.error(
                             "Error in handler for topic '%s': %s",
