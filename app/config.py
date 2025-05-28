@@ -7,11 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATE_TIME_FORMAT = os.getenv(
-    "DATE_TIME_FORMAT",
-    "%Y-%m-%d %H:%M:%S",
-)
-
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_DB = os.getenv("POSTGRES_DB")

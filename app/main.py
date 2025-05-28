@@ -28,10 +28,22 @@ from rossmann_sync_schemas import CategorySchema, ProductSchema, ProductDescSche
 init_logging()
 logger = logging.getLogger(__name__)
 
-START_DATE_TIME = datetime.datetime(2025, 6, 1, 8, 0)
+# For Big Data
+# START_DATE_TIME = datetime.datetime(2025, 5, 1, 8, 0)
+# TIME_STEP = 0.001
+# MINUTES_STEP = 0.1
+# TIME_KAFKA_SEND_UPDATE_TO_OLTP = 20
+# DAYS = 300
+# DELIVERY_COUNT_FROM = 2000
+# DELIVERY_COUNT_TO = 5000
+
+START_DATE_TIME = datetime.datetime(2025, 5, 1, 8, 0)
 TIME_STEP = 1
 MINUTES_STEP = 5
 TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
+DAYS = 60
+DELIVERY_COUNT_FROM = 200
+DELIVERY_COUNT_TO = 500
 
 
 class PatchedDateTime(datetime.datetime):
@@ -73,7 +85,7 @@ async def main():
     )
 
     product_price_factor = 1.0
-    for current_day in range(1, 61):
+    for current_day in range(1, DAYS + 1):
         if current_day % 20 == 0:
             product_price_factor += 0.05
         await start_work_shift(updated_products_id, product_price_factor)
@@ -196,7 +208,14 @@ async def start_delivery_process(
         if (now.hour, now.minute) in [(10, 0), (18, 0)]:
             db = next(get_db())
             try:
-                await do_delivery(db, shop, admin, courier, updated_products_id)
+                await do_delivery(
+                    db=db, 
+                    shop=shop, 
+                    admin=admin, 
+                    courier=courier, 
+                    updated_products_id=updated_products_id,
+                    count_from=DELIVERY_COUNT_FROM,
+                    count_to=DELIVERY_COUNT_TO,)
             finally:
                 db.close()
         await asyncio.sleep(TIME_STEP)

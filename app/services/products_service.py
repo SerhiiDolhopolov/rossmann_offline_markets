@@ -119,6 +119,9 @@ async def do_delivery(
     admin: Employee, 
     courier: Employee, 
     updated_products_id: set[int],
+    count_from: int = 200,
+    count_to: int = 500,
+    count_step: int = 10,
 ):
     delivery_products = (
         db.query(Product, Category)
@@ -138,7 +141,7 @@ async def do_delivery(
     
     delivery_report = DeliveryReport()
     for product, category in delivery_products:
-        delivery_quantity = random.randrange(200, 500, 10)
+        delivery_quantity = random.randrange(count_from, count_to, count_step)
         product.stock_quantity += delivery_quantity
         db.add(product)
         updated_products_id.add(product.product_id)

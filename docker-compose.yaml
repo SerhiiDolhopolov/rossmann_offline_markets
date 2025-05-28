@@ -60,6 +60,42 @@ services:
         timeout: 10s
         retries: 12
 
+  local_db_4:
+    container_name: offline-market-db-4
+    networks:
+      - rossmann-network
+    image: postgres:latest
+    restart: always
+    ports:
+      - 2003:5432
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+        interval: 10s
+        timeout: 10s
+        retries: 12
+
+  local_db_5:
+    container_name: offline-market-db-5
+    networks:
+      - rossmann-network
+    image: postgres:latest
+    restart: always
+    ports:
+      - 2004:5432
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+        interval: 10s
+        timeout: 10s
+        retries: 12
+
   local_app_1:
     container_name: offline-market-app-1
     networks:
@@ -137,4 +173,56 @@ services:
       CASHIER_1_EMAIL: 'tyrion.lannister@example.com'
       CASHIER_2_EMAIL: 'jaime.lannister@example.com'
       CASHIER_3_EMAIL: 'cersei.lannister@example.com'
+    restart: on-failure:3
+
+  local_app_4:
+    container_name: offline-market-app-4
+    networks:
+      - rossmann-network
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      local_db_4:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+      POSTGRES_PORT: $POSTGRES_PORT
+      POSTGRES_HOST: local_db_4
+      SHOP_ID: 4
+      ADMIN_EMAIL: 'petyr.baelish@example.com'
+      COURIER_EMAIL: 'ramsay.bolton@example.com'
+      CASHIER_1_EMAIL: 'brienne.tarth@example.com'
+      CASHIER_2_EMAIL: 'jorah.mormont@example.com'
+      CASHIER_3_EMAIL: 'theon.greyjoy@example.com'
+    restart: on-failure:3
+
+  local_app_5:
+    container_name: offline-market-app-5
+    networks:
+      - rossmann-network
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      local_db_5:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+      POSTGRES_PORT: $POSTGRES_PORT
+      POSTGRES_HOST: local_db_5
+      SHOP_ID: 5
+      ADMIN_EMAIL: 'samwell.tarly@example.com'
+      COURIER_EMAIL: 'ramsay.bolton@example.com'
+      CASHIER_1_EMAIL: 'bronn.blackwater@example.com'
+      CASHIER_2_EMAIL: 'sandor.clegane@example.com'
+      CASHIER_3_EMAIL: 'gendry.waters@example.com'
     restart: on-failure:3
