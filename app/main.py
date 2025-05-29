@@ -28,7 +28,7 @@ from rossmann_sync_schemas import CategorySchema, ProductSchema, ProductDescSche
 init_logging()
 logger = logging.getLogger(__name__)
 
-START_DATE_TIME = datetime.datetime(2025, 5, 1, 8, 0)
+START_DATE_TIME = datetime.datetime(2025, 3, 1, 8, 0)
 TIME_STEP = 0.1
 MINUTES_STEP = 5
 TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
