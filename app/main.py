@@ -29,16 +29,16 @@ init_logging()
 logger = logging.getLogger(__name__)
 
 # For Big Data
-# START_DATE_TIME = datetime.datetime(2025, 5, 1, 8, 0)
+# START_DATE_TIME = datetime.datetime(2025, 3, 1, 8, 0)
 # TIME_STEP = 0.001
 # MINUTES_STEP = 0.1
-# TIME_KAFKA_SEND_UPDATE_TO_OLTP = 20
+# TIME_KAFKA_SEND_UPDATE_TO_OLTP = 50
 # DAYS = 300
 # DELIVERY_COUNT_FROM = 2000
 # DELIVERY_COUNT_TO = 5000
 
 START_DATE_TIME = datetime.datetime(2025, 5, 1, 8, 0)
-TIME_STEP = 1
+TIME_STEP = 0.1
 MINUTES_STEP = 5
 TIME_KAFKA_SEND_UPDATE_TO_OLTP = 10
 DAYS = 60
