@@ -69,9 +69,11 @@ async def main():
     asyncio.create_task(start_kafka_producer(updated_products_id))
     asyncio.create_task(
         consume_messages(
-            {KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka},
-            {KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT: sync_product_by_kafka},
-            {KAFKA_TOPIC_LOCAL_DB_UPDATE_PRODUCT_DESC: update_product_desc_by_kafka}
+            {
+                KAFKA_TOPIC_LOCAL_DB_UPSERT_CATEGORY: sync_category_by_kafka,
+                KAFKA_TOPIC_LOCAL_DB_UPSERT_PRODUCT: sync_product_by_kafka,
+                KAFKA_TOPIC_LOCAL_DB_UPDATE_PRODUCT_DESC: update_product_desc_by_kafka
+            },
         )
     )
 
@@ -84,6 +86,7 @@ async def main():
 
 async def start_kafka_producer(updated_products_id: set[int]):
     logger.info("Starting Kafka producer...")
+    producer = None
     try:
         producer = await init_producer()
         while True:
