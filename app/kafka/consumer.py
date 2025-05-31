@@ -1,7 +1,6 @@
 import logging
 import asyncio
 from typing import Awaitable
-from datetime import datetime
 
 from aiokafka import AIOKafkaConsumer
 from aiokafka.errors import KafkaConnectionError
