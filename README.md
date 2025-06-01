@@ -28,16 +28,16 @@
 ## Introduction
 🟢 **This is part 3 of 7 Docker sections in the 🔴 [Supermarket Simulation Project](https://github.com/SerhiiDolhopolov/rossmann_services).**
 
-🔵 [**<- Preview part with a General OLTP DB.**](https://github.com/SerhiiDolhopolov/rossmann_oltp)
+🔵 [**<- Previous part with a General OLTP DB.**](https://github.com/SerhiiDolhopolov/rossmann_oltp)
 
 ## Project workflow
-This section contains the simulation of five Offline Markets, each one have 3 terminals. The database is created using the [SQLAlchemy](https://www.sqlalchemy.org/) ORM. Tables with products and category info serve as cache tables for the overall database. The tables are syncronised via Sync API at the start of the work shift and then they syncronise stream data via [Kafka](https://kafka.apache.org/)
+This section contains the simulation of five offline markets, each with 3 terminals. The database is created using the [SQLAlchemy](https://www.sqlalchemy.org/) ORM. Tables with product and category info serve as cache tables for the overall database. The tables are synchronized via Sync API at the start of the work shift and then synchronize stream data via [Kafka](https://kafka.apache.org/).
 
-At the end of each work shift, the shop sends a report about transcations to [ClickHouse](https://clickhouse.com/). Each delivery report also sends to [ClickHouse](https://clickhouse.com/).
+At the end of each work shift, the shop sends a report about transactions to [ClickHouse](https://clickhouse.com/). Each delivery report is also sent to [ClickHouse](https://clickhouse.com/).
 
 ## Docker Containers
 **This Docker section includes:**
-  - **Five LOCAL OLTP DB**
+  - **Five LOCAL OLTP DBs**
     - Server for Adminer:
       - `local_db_1:5432`
     - Server for external tools:
@@ -49,15 +49,15 @@ At the end of each work shift, the shop sends a report about transcations to [Cl
 ## Database Schema
 The schema was created at [chartdb.io](https://chartdb.io/).
 
-**Products** and **Categories** are cached tables for General OLTP DB
+**Products** and **Categories** are cache tables for the General OLTP DB.
 
 ![Local OLTP Schema](images/local_db.png)
 
 ## Kafka consumer
-Kafka consumer is implemented via an async version - aiokafka. Kafka consumes messages from topics with update product/category info. Data modification occurs through the upsert strategy. Aiokafka hasn't included reconnect mechanism, so it was realesed.
+The Kafka consumer is implemented using the async version - aiokafka. Kafka consumes messages from topics with updated product/category info. Data modification occurs through the upsert strategy. Aiokafka does not include a reconnect mechanism, so it was implemented separately.
 
 ## Kafka producer
-Kafka consumer is implemented via aiokafka too. Kafka producer send messages about product quantity with some interval.
+The Kafka producer is also implemented via aiokafka. The Kafka producer sends messages about product quantity at regular intervals.
 
 ## Getting Started
 **To start:**
