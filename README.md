@@ -54,14 +54,14 @@ The schema was created at [chartdb.io](https://chartdb.io/).
 ![Local OLTP Schema](images/local_db.png)
 
 ## Kafka consumer
-The Kafka consumer is implemented using the async version - aiokafka. Kafka consumes messages from topics with updated product/category info. Data modification occurs through the upsert strategy. Aiokafka does not include a reconnect mechanism, so it was implemented separately.
+The Kafka consumer is implemented using the async version - [aiokafka](https://aiokafka.readthedocs.io/en/stable/). Kafka consumes messages from topics with updated product/category info. Data modification occurs through the upsert strategy. Aiokafka does not include a reconnect mechanism, so it was implemented separately.
 
 ## Kafka producer
-The Kafka producer is also implemented via aiokafka. The Kafka producer sends messages about product quantity at regular intervals.
+The Kafka producer is also implemented via [aiokafka](https://aiokafka.readthedocs.io/en/stable/). The Kafka producer sends messages about product quantity at regular intervals.
 
 ## Getting Started
 **To start:**
-1. Complete all steps in the [first part](https://github.com/SerhiiDolhopolov/rossmann_services).
+1. Complete all steps in the [main part](https://github.com/SerhiiDolhopolov/rossmann_services).
 2. Run the services:
 ```bash
 docker compose up --build
